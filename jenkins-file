@@ -1,0 +1,44 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('git checkout') {
+            steps {
+                git branch: 'main', credentialsId: 'shinnu73', url: 'https://github.com/shinnu73/maven-nexus-tomcat-cicd.git'
+            }
+        }
+        stage('maven clean build') {
+            steps {
+                script {
+                    def mavenHome = tool name: "Maven-3.8.6", type: "maven"
+                    def mavenCMD = "${mavenHome}/bin/mvn"
+                    bat "${mavenCMD} clean install"
+                }
+            }
+        }
+        stage('sonar code review') {
+            steps {
+                withSonarQubeEnv('Sonar-Server-7.6') {
+                    script {
+                        def mavenHome = tool name: "Maven-3.8.6", type: "maven"
+                        def mavenCMD = "${mavenHome}/bin/mvn"
+                        bat "${mavenCMD} sonar:sonar"
+                    }
+                }
+            }
+        }
+        stage('Upload Build Artifact') {
+            steps {
+                nexusArtifactUploader artifacts: [[artifactId: '01-maven-web-app', classifier: '', file: 'target/01-maven-web-app.war', type: 'war']], credentialsId: 'nexus-credentials', groupId: 'nexus', nexusUrl: '100.26.53.127:8081', nexusVersion: 'nexus3', protocol: 'http', repository: 'shinnu-snapshot-repository', version: '3.0-SNAPSHOT'
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                deploy adapters: [tomcat9(credentialsId: 'user', path: '', url: 'http://34.226.219.52:8080/')], contextPath: null, war: '**/*.war'
+                sh 'curl -u tomcat:abcd http://34.226.219.52:8080/manager/text/list'
+                
+            }
+        }
+    }
+}
